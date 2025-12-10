@@ -410,4 +410,10 @@ export class MyMCP extends McpAgent {
 			},
 		);
 	}
-};
+}
+
+// Default export using McpAgent.serve() method
+// This creates the proper fetch handler that routes to the MCP Durable Object
+export default MyMCP.serve("/sse", {
+	binding: "MCP_OBJECT"
+});
