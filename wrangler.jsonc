@@ -32,7 +32,17 @@
 	},
 	"observability": {
 		"enabled": true
-	}
+	},
+	"kv_namespaces": [
+		{
+			"binding": "PROJECT_PLANNER_STORE",
+			"id": "282d6d2418984044abea6c76a29c636e",
+			"remote": true
+		}
+	]
+
+
+	
 	/**
 	 * Smart Placement
 	 * Docs: https://developers.cloudflare.com/workers/configuration/smart-placement/#smart-placement
