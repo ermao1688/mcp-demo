@@ -82,6 +82,8 @@ export class MyMCP extends McpAgent {
 
 	async init() {
 		// New version MUST use server.registerTool(...)
+
+		// Create a new project
 		this.server.tool(
 			"createProject",
 			"Create a new project",
@@ -122,6 +124,7 @@ export class MyMCP extends McpAgent {
 			},
 		);
 
+		// Get the list of all projects
 		this.server.tool(
 			"get_project_list",
 			"Get the list of all projects",
@@ -146,6 +149,7 @@ export class MyMCP extends McpAgent {
 			},
 		);
 
+		// Get a project by its ID
 		this.server.tool(
 			"get_project",
 			"Get a project by its ID",
