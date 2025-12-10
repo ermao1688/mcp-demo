@@ -45,6 +45,18 @@ export class MyMCP extends McpAgent {
 		return listData ? JSON.parse(listData) : [];
 	}
 
+	private async getTodosByProject(projectId: string): Promise<Todo[]> {	
+		const todoList = await this.getTodoList(projectId);
+		const todos: Todo[] = [];
+		for (const todoId of todoList) {
+			const todoData = await this.KV.get(`todo:${todoId}`);
+			if (todoData) {
+				todos.push(JSON.parse(todoData));
+			}
+		}
+		return todos;
+	}
+
 	// private async addTodo(projectId: string, todo: Todo): Promise<void> {
 	// 	const todoList = await this.getTodoList(projectId);
 	// 	todoList.push(todo.id);
@@ -135,6 +147,85 @@ export class MyMCP extends McpAgent {
 		);
 
 		this.server.tool(
+			"get_project",
+			"Get a project by its ID",
+			{
+				projectId: z.string().describe("The ID of the project to get"),
+			},
+			async ({ projectId }) => {
+				const projectData = await this.KV.get(`project:${projectId}`);
+				if (!projectData) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Project with ID ${projectId} not found`,
+							},
+						],
+					};
+				}
+				const project: Project = JSON.parse(projectData);
+				const todos = await this.getTodosByProject(projectId);
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify({project, todos}, null, 2), // JSON.stringify(value, replacer, space)
+						},
+					],
+				};
+			},
+		);
+
+		this.server.tool(
+			"delete_project",
+			"Delete a project by its ID and all its todos",
+			{
+				projectId: z.string().describe("The ID of the project to delete"),
+			},
+			async ({ projectId }) => {
+				const projectData = await this.KV.get(`project:${projectId}`);
+				if (!projectData) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Project with ID ${projectId} not found`,
+							},
+						],
+					};
+				}
+
+				// Delete the project and all its todos
+				const todos = await this.getTodosByProject(projectId);
+
+				for (const todo of todos) {
+					await this.deleteTodo(projectId, todo.id);
+				}
+				await this.KV.delete(`project:${projectId}`);
+				const projectList = await this.getProjectList();
+				// Delete the project from the project list
+				// const updatedList = projectList.filter((id) => id !== projectId);
+
+				// Use splice(start, deleteCount) to delete the project from the project list
+				const index = projectList.indexOf(projectId);
+				if (index !== -1) {
+					projectList.splice(index, 1); // splice(start, deleteCount)
+				}
+				await this.KV.put("project:list", JSON.stringify(projectList)); // Put the updated project list back to the KV
+
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Project with ID ${projectId} and all its todos deleted`,
+						},
+					],
+				};
+			},
+		);
+
+		this.server.tool(
 			"create_todo",
 			"Create a new todo item for a project",
 			{
@@ -178,6 +269,89 @@ export class MyMCP extends McpAgent {
 						{
 							type: "text",
 							text: JSON.stringify(todo, null, 2),
+						},
+					],
+				};
+			},
+		);
+
+		this.server.tool(
+			"update_todo",
+			"Update a todo's properties",
+			{
+				todoId: z.string().describe("The ID of the todo to update for"),
+				title: z.string().describe("New title of the todo").min(1),
+				description: z.string().optional().describe("New todo description"),
+				status: z.enum(["pending", "in_progress", "completed"]).optional().describe("Todo status"),
+				priority: z.enum(["low", "medium", "high"]).optional().describe("New todo priority"),
+			},
+			async ({ todoId, title, description, status, priority }) => {
+				const todoData = await this.KV.get(`todo:${todoId}`);
+				if (!todoData) {
+					return {
+						content: [
+							{
+								type: "text",
+								text: `Todo with ID ${todoId} not found`,
+							},
+						],
+					};
+				}
+				const todo: Todo = JSON.parse(todoData);
+				todo.title = title;
+				todo.description = description ?? todo.description;
+				todo.status = status ?? todo.status;
+				todo.priority = priority ?? todo.priority;
+				todo.updatedAt = new Date().toISOString();
+				await this.KV.put(`todo:${todoId}`, JSON.stringify(todo));
+
+				return {
+					content: [
+						{
+							type: "text",
+							text: JSON.stringify(todo, null, 2),
+						},
+					],
+				};
+			},
+		);
+
+		this.server.tool(
+			"delete_todo",
+			"Delete a todo from a project",
+			{
+				todoId: z.string().describe("Todo ID"),
+			},
+			async ({ todoId }) => {
+				const todoData = await this.KV.get(`todo:${todoId}`);
+				if (!todoData) {
+					// Use throw new Error(...) to throw an error instead of returning a response
+					throw new Error(`Todo with ID ${todoId} not found`);
+
+					// return {
+					// 	content: [
+					// 		{
+					// 			type: "text",
+					// 			text: `Todo with ID ${todoId} not found`,
+					// 		},
+					// 	],
+					// };
+				}
+				// Remove from the project's todo list
+				const todo: Todo = JSON.parse(todoData);
+				const todoList = await this.getTodoList(todo.projectId);
+				const updatedList = todoList.filter((id) => id !== todoId);
+				// Put the updated todo list back to the KV
+				await this.KV.put(`project:${todo.projectId}:todos`, JSON.stringify(updatedList));
+
+				// Delete the todo from the KV
+				await this.KV.delete(`todo:${todoId}`);
+
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Todo with ID ${todoId} deleted`,
 						},
 					],
 				};
